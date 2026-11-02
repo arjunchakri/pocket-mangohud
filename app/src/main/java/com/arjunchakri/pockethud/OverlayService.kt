@@ -70,16 +70,16 @@ class OverlayService:Service(){
   val foreground=currentForegroundPackage()
   if(foreground!=activePackage){activePackage=foreground;appStartMs=if(foreground!=null)now else 0L;appStartLevel=if(foreground!=null)level else -1;activeName=try{if(foreground==null)"No game detected"else packageManager.getApplicationLabel(packageManager.getApplicationInfo(foreground,0)).toString()}catch(_:Exception){foreground?:"No game detected"}}
   if(level in 1..100){if(previousLevel>=0&&previousAt>0&&level<previousLevel){val h=(now-previousAt)/3600000.0;if(h>0)drainPerHour=(previousLevel-level)/h};if(previousLevel<0||level<previousLevel){previousLevel=level;previousAt=now}}
-  appLine.text=if(hasUsageAccess())"APP  $activeName"else"APP  enable Usage Access in settings"
-  batteryLine.text=if(level in 0..100)"$level% battery"else"--% battery"
+  appLine.text=if(hasUsageAccess())activeName else"Enable Usage Access"
+  batteryLine.text=if(level in 0..100)"$level%"else"--%"
   val direct=if(!bm.isCharging&&current!=Int.MIN_VALUE&&charge>0&&abs(current.toLong())>20)(charge.toDouble()/abs(current.toLong())).takeIf{it.isFinite()&&it in 0.0..72.0}else null
   val hrs=direct?:drainPerHour?.let{if(it>0)level/it else null}
-  timeLine.text=if(bm.isCharging)"Charging"else if(hrs==null)"Playtime remaining: learning…"else String.format(Locale.getDefault(),"Playtime remaining: %dh %02dm",(hrs*60).toInt()/60,(hrs*60).toInt()%60)
+  timeLine.text=if(bm.isCharging)"Charging"else if(hrs==null)"Remaining —"else String.format(Locale.getDefault(),"Remaining %dh %02dm",(hrs*60).toInt()/60,(hrs*60).toInt()%60)
   val elapsed=if(appStartMs>0)(now-appStartMs)/60000.0 else 0.0
   val appDrain=if(appStartLevel>=0&&elapsed>=0.5&&level<=appStartLevel)(appStartLevel-level).toDouble()/elapsed else null
   val used=if(appStartLevel>=0&&level<=appStartLevel)appStartLevel-level else 0
   val rate=appDrain?.let{String.format(Locale.getDefault(),"%.3f%%/min",it)}?:"warming up"
-  sessionLine.text=if(appStartMs>0)String.format(Locale.getDefault(),"APP SESSION  %dh %02dm  ·  -%d%%  ·  %s",(elapsed/60).toInt(),elapsed.toInt()%60,used,rate)else"APP SESSION  —"
+  sessionLine.text=if(appStartMs>0)String.format(Locale.getDefault(),"%dh %02dm  ·  -%d%%  ·  %s",(elapsed/60).toInt(),elapsed.toInt()%60,used,rate)else"—"
   val lines=mutableListOf<String>()
   if(prefs.getBoolean("show_ram",false)){val mi=ActivityManager.MemoryInfo();(getSystemService(ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(mi);lines.add(String.format(Locale.getDefault(),"RAM %.1f/%.1f GB",(mi.totalMem-mi.availMem)/1073741824.0,mi.totalMem/1073741824.0))}
   if(prefs.getBoolean("show_cpu",false)){val cpu=cpuLoad();lines.add(if(cpu==null)"CPU —"else String.format(Locale.getDefault(),"CPU %.0f%%",cpu))}
