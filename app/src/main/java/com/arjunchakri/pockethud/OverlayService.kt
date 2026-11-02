@@ -42,18 +42,23 @@ class OverlayService:Service(){
  override fun onCreate(){super.onCreate();foreground();if(!android.provider.Settings.canDrawOverlays(this)){stopSelf();return};wm=getSystemService(WINDOW_SERVICE) as WindowManager;makePanel();handler.post(tick)}
  private fun foreground(){val id="pocket_hud";val nm=getSystemService(NotificationManager::class.java);if(Build.VERSION.SDK_INT>=26)nm.createNotificationChannel(NotificationChannel(id,"Pocket HUD",NotificationManager.IMPORTANCE_LOW));val b=if(Build.VERSION.SDK_INT>=26)Notification.Builder(this,id)else @Suppress("DEPRECATION") Notification.Builder(this);startForeground(41,b.setContentTitle("Pocket HUD is active").setContentText("Tracking gaming battery usage").setSmallIcon(android.R.drawable.ic_menu_info_details).setOngoing(true).build())}
  private fun makePanel(){
-  val root=LinearLayout(this).apply{orientation=1;setPadding(dp(13),dp(11),dp(13),dp(11));background=bg(0xF21B2028.toInt());elevation=dp(8).toFloat();setOnTouchListener(Drag())}
-  val head=LinearLayout(this).apply{orientation=0;gravity=Gravity.CENTER_VERTICAL}
-  head.addView(TextView(this).apply{text="POCKET HUD";textSize=10f;letterSpacing=.15f;setTextColor(0xFF9AAABD.toInt());typeface=Typeface.DEFAULT_BOLD},LinearLayout.LayoutParams(0,-2,1f))
-  head.addView(TextView(this).apply{text="● LIVE";textSize=9f;setTextColor(0xFF83C9A5.toInt())});root.addView(head)
-  appLine=addText(root,"Detecting foreground app…",12f,0xFF8BC5E2.toInt(),true)
-  batteryLine=addText(root,"--% battery",26f,Color.WHITE,true)
-  timeLine=addText(root,"Playtime remaining: estimating",14f,0xFF8BC5E2.toInt(),true)
-  val rule=View(this).apply{setBackgroundColor(0xFF3B4552.toInt())};root.addView(rule,LinearLayout.LayoutParams(-1,dp(1)))
-  sessionLine=addText(root,"APP SESSION  waiting",11f,0xFFD2DBE5.toInt(),false)
-  metricsLine=addText(root,"",10f,0xFFADB9C7.toInt(),false)
+  val root=LinearLayout(this).apply{orientation=1;setPadding(dp(9),dp(6),dp(9),dp(6));background=GradientDrawable().apply{setColor(0xD9161A20.toInt());cornerRadius=dp(10).toFloat()};elevation=dp(4).toFloat();setOnTouchListener(Drag())}
+  val top=LinearLayout(this).apply{orientation=0;gravity=Gravity.CENTER_VERTICAL}
+  appLine=TextView(this).apply{text="Detecting game…";textSize=11f;setTextColor(0xFFE4EAF0.toInt());typeface=Typeface.DEFAULT_BOLD;maxLines=1}
+  top.addView(appLine,LinearLayout.LayoutParams(0,-2,1f))
+  batteryLine=TextView(this).apply{text="--%";textSize=15f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD}
+  top.addView(batteryLine)
+  root.addView(top)
+  val bottom=LinearLayout(this).apply{orientation=0;gravity=Gravity.CENTER_VERTICAL}
+  timeLine=TextView(this).apply{text="Remaining —";textSize=10f;setTextColor(0xFFB7C4D2.toInt())}
+  bottom.addView(timeLine,LinearLayout.LayoutParams(0,-2,1f))
+  sessionLine=TextView(this).apply{text="SESSION —";textSize=10f;setTextColor(0xFFB7C4D2.toInt())}
+  bottom.addView(sessionLine)
+  root.addView(bottom)
+  metricsLine=TextView(this).apply{text="";textSize=9f;setTextColor(0xFF9AAABD.toInt());visibility=View.GONE}
+  root.addView(metricsLine)
   val type=if(Build.VERSION.SDK_INT>=26)WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-  val p=WindowManager.LayoutParams(-2,-2,type,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply{gravity=Gravity.TOP or Gravity.START;x=dp(14);y=dp(140)}
+  val p=WindowManager.LayoutParams(-2,-2,type,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply{gravity=Gravity.TOP or Gravity.START;x=dp(10);y=dp(110)}
   panel=root;wm.addView(root,p)
  }
  private fun addText(root:LinearLayout,value:String,size:Float,color:Int,bold:Boolean):TextView{val t=TextView(this).apply{text=value;textSize=size;setTextColor(color);if(bold)typeface=Typeface.DEFAULT_BOLD;setPadding(0,dp(5),0,dp(2))};root.addView(t);return t}
@@ -81,8 +86,8 @@ class OverlayService:Service(){
   if(prefs.getBoolean("show_refresh",false)){val hz=if(Build.VERSION.SDK_INT>=23)(getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.refreshRate else 0f;lines.add(if(hz>0)"DISPLAY "+String.format(Locale.getDefault(),"%.0f Hz",hz)else"DISPLAY —")}
   if(prefs.getBoolean("show_temp",true)){lines.add("BAT TEMP "+if(temp>0)String.format(Locale.getDefault(),"%.1f°C",temp/10f)else"—");lines.add("VOLT "+if(volt>0)String.format(Locale.getDefault(),"%.2fV",volt/1000f)else"—")}
   if(prefs.getBoolean("show_power",false)){val w=if(current!=Int.MIN_VALUE&&volt>0)abs(current.toLong())*volt/1000000000.0 else null;lines.add(if(w==null)"POWER —"else String.format(Locale.getDefault(),"POWER %.2f W (battery)",w))}
-  if(prefs.getBoolean("show_fps",false))lines.add("FPS — (not exposed to normal apps)")
-  metricsLine.text=lines.joinToString("   ·   ")
+  
+  metricsLine.text=lines.joinToString(" · ");metricsLine.visibility=if(lines.isEmpty())View.GONE else View.VISIBLE
  }
  private fun cpuLoad():Double?{return try{val a=BufferedReader(FileReader("/proc/stat")).use{it.readLine().trim().split(Regex("\\s+")).drop(1).map{v->v.toLong()}};val idle=a[3]+(a.getOrNull(4)?:0);val total=a.sum();val old=cpuPrevious;cpuPrevious=total to idle;if(old==null)null else{val dt=total-old.first;val di=idle-old.second;if(dt>0)100.0*(dt-di)/dt else null}}catch(_:Exception){null}}
  private inner class Drag:View.OnTouchListener{var sx=0;var sy=0;var tx=0f;var ty=0f;override fun onTouch(v:View,e:MotionEvent):Boolean{val p=panel?.layoutParams as? WindowManager.LayoutParams?:return false;when(e.action){MotionEvent.ACTION_DOWN->{sx=p.x;sy=p.y;tx=e.rawX;ty=e.rawY;return true};MotionEvent.ACTION_MOVE->{p.x=sx+(e.rawX-tx).toInt();p.y=sy+(e.rawY-ty).toInt();wm.updateViewLayout(panel,p);return true}};return true}}
