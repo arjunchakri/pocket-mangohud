@@ -1,6 +1,7 @@
 package com.arjunchakri.pockethud
-
 import android.app.Activity
+import android.app.AppOpsManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -9,98 +10,35 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Gravity
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.TextView
-
-class MainActivity : Activity() {
-    private lateinit var status: TextView
-
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    private fun card(color: Int, radius: Int = 18) = GradientDrawable().apply {
-        setColor(color); cornerRadius = dp(radius).toFloat()
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(36), dp(24), dp(24))
-            setBackgroundColor(Color.rgb(23, 26, 32))
-        }
-        root.addView(TextView(this).apply {
-            text = "POCKET HUD"
-            textSize = 12f; letterSpacing = .18f
-            setTextColor(Color.rgb(145, 160, 177)); typeface = Typeface.DEFAULT_BOLD
-        })
-        root.addView(TextView(this).apply {
-            text = "Your gaming\ncompanion."
-            textSize = 32f; setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setPadding(0, dp(12), 0, dp(8))
-        })
-        root.addView(TextView(this).apply {
-            text = "A lightweight floating overlay for battery life and playtime. Built for gaming on Android."
-            textSize = 15f; setTextColor(Color.rgb(174, 184, 197))
-            setPadding(0, 0, 0, dp(24))
-        })
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = card(Color.rgb(35, 41, 51))
-        }
-        panel.addView(TextView(this).apply {
-            text = "QUICK SETUP"; textSize = 11f; letterSpacing = .14f
-            setTextColor(Color.rgb(126, 190, 220)); typeface = Typeface.DEFAULT_BOLD
-        })
-        status = TextView(this).apply {
-            textSize = 14f; setTextColor(Color.rgb(218, 225, 234))
-            setPadding(0, dp(12), 0, dp(16))
-        }
-        panel.addView(status)
-        panel.addView(Button(this).apply {
-            text = "Enable floating HUD"
-            isAllCaps = false; textSize = 15f
-            setTextColor(Color.WHITE)
-            background = card(Color.rgb(26, 116, 160), 12)
-            setOnClickListener { enableHud() }
-        })
-        panel.addView(Button(this).apply {
-            text = "Stop HUD"; isAllCaps = false
-            setTextColor(Color.rgb(220, 226, 235))
-            background = card(Color.rgb(53, 61, 73), 12)
-            setOnClickListener {
-                stopService(Intent(this@MainActivity, OverlayService::class.java))
-                refreshStatus()
-            }
-        })
-        root.addView(panel)
-        root.addView(TextView(this).apply {
-            text = "Tip: drag the floating panel to move it out of the way while playing."
-            textSize = 13f; setTextColor(Color.rgb(126, 137, 152))
-            setPadding(2, dp(18), 2, 0)
-        })
-        setContentView(root)
-        refreshStatus()
-    }
-
-    private fun enableHud() {
-        if (!Settings.canDrawOverlays(this)) {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-            return
-        }
-        val intent = Intent(this, OverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
-        status.text = "HUD started. You can return to your game."
-    }
-
-    override fun onResume() { super.onResume(); if (::status.isInitialized) refreshStatus() }
-
-    private fun refreshStatus() {
-        status.text = if (Settings.canDrawOverlays(this))
-            "●  Overlay permission granted\nYou're ready to start the HUD."
-        else
-            "○  Overlay permission required\nAndroid will open Settings so you can allow Pocket HUD to appear over games."
-    }
+class MainActivity:Activity(){
+ private lateinit var status:TextView
+ private val prefs by lazy{getSharedPreferences("hud_options",Context.MODE_PRIVATE)}
+ private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
+ private fun card(c:Int)=GradientDrawable().apply{setColor(c);cornerRadius=dp(16).toFloat()}
+ override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
+  val root=LinearLayout(this).apply{orientation=1;setPadding(dp(22),dp(32),dp(22),dp(28));setBackgroundColor(0xFF171A20.toInt())}
+  root.addView(TextView(this).apply{text="POCKET HUD";textSize=12f;letterSpacing=.18f;setTextColor(0xFF91A0B1.toInt());typeface=Typeface.DEFAULT_BOLD})
+  root.addView(TextView(this).apply{text="Your gaming\ncompanion.";textSize=30f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;setPadding(0,dp(10),0,dp(6))})
+  root.addView(TextView(this).apply{text="Track which game drains your battery, how quickly, and what your phone is doing.";textSize=14f;setTextColor(0xFFADB8C5.toInt());setPadding(0,0,0,dp(18))})
+  val setup=LinearLayout(this).apply{orientation=1;setPadding(dp(16),dp(16),dp(16),dp(16));background=card(0xFF232933.toInt())}
+  setup.addView(TextView(this).apply{text="PERMISSIONS";textSize=11f;letterSpacing=.12f;setTextColor(0xFF83BEDD.toInt());typeface=Typeface.DEFAULT_BOLD})
+  status=TextView(this).apply{textSize=13f;setTextColor(0xFFD8E1EA.toInt());setPadding(0,dp(10),0,dp(8))};setup.addView(status)
+  setup.addView(Button(this).apply{text="Allow floating overlay";isAllCaps=false;setOnClickListener{if(!Settings.canDrawOverlays(this@MainActivity))startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))else startHud()}})
+  setup.addView(Button(this).apply{text="Allow app/game detection";isAllCaps=false;setOnClickListener{startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))}})
+  setup.addView(Button(this).apply{text="Start HUD";isAllCaps=false;setOnClickListener{startHud()}})
+  setup.addView(Button(this).apply{text="Stop HUD";isAllCaps=false;setOnClickListener{stopService(Intent(this@MainActivity,OverlayService::class.java));refresh()}})
+  root.addView(setup)
+  root.addView(TextView(this).apply{text="OPTIONAL HUD METRICS";textSize=11f;letterSpacing=.12f;typeface=Typeface.DEFAULT_BOLD;setTextColor(0xFF83BEDD.toInt());setPadding(2,dp(20),0,dp(6))})
+  listOf("show_ram" to "RAM usage","show_cpu" to "CPU usage","show_refresh" to "Screen refresh rate","show_temp" to "Battery temperature and voltage","show_fps" to "FPS (availability depends on Android/game)","show_power" to "Estimated battery power draw").forEach{(key,label)->root.addView(CheckBox(this).apply{text=label;isChecked=prefs.getBoolean(key,key=="show_temp");setTextColor(0xFFD8E1EA.toInt());setOnCheckedChangeListener{_,checked->prefs.edit().putBoolean(key,checked).apply()}})}
+  root.addView(TextView(this).apply{text="App detection uses Android Usage Access. Per-app battery drain is estimated from battery percentage change during the foreground session.";textSize=12f;setTextColor(0xFF8996A6.toInt());setPadding(2,dp(16),2,0)})
+  setContentView(root);refresh()
+ }
+ private fun startHud(){if(!Settings.canDrawOverlays(this)){startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")));return};val i=Intent(this,OverlayService::class.java);if(Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);status.text="HUD started. Switch to your game."}
+ private fun hasUsageAccess():Boolean{val ops=getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager;@Suppress("DEPRECATION") val m=ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,android.os.Process.myUid(),packageName);return m==AppOpsManager.MODE_ALLOWED}
+ override fun onResume(){super.onResume();if(::status.isInitialized)refresh()}
+ private fun refresh(){status.text=(if(Settings.canDrawOverlays(this))"● Overlay permission granted"else"○ Overlay permission needed")+"\n"+(if(hasUsageAccess())"● App detection permission granted"else"○ App detection permission needed")}
 }
