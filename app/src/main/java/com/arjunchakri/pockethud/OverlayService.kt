@@ -1,72 +1,289 @@
 package com.arjunchakri.pockethud
-import android.app.*
-import android.app.usage.UsageEvents
-import android.app.usage.UsageStatsManager
-import android.content.*
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.os.*
+import android.os.BatteryManager
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.io.BufferedReader
-import java.io.FileReader
 import java.util.Locale
 import kotlin.math.abs
-class OverlayService:Service(){
- private lateinit var wm:WindowManager
- private var panel:View?=null
- private lateinit var powerLine:TextView
- private lateinit var timeLine:TextView
- private val handler=Handler(Looper.getMainLooper())
- private val prefs by lazy{getSharedPreferences("hud_options",Context.MODE_PRIVATE)}
- private var activePackage:String?=null
- private var activeName="Waiting for game"
- private var appStartMs=0L
- private var appStartLevel=-1
- private var previousLevel=-1
- private var previousAt=0L
- private var drainPerHour:Double?=null
- private var cpuPrevious:Pair<Long,Long>?=null
- private val tick=object:Runnable{override fun run(){update();handler.postDelayed(this,5000)}}
- private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
- private fun bg(c:Int)=GradientDrawable().apply{setColor(c);cornerRadius=dp(15).toFloat();setStroke(dp(1),0xFF46515F.toInt())}
- override fun onCreate(){super.onCreate();foreground();if(!android.provider.Settings.canDrawOverlays(this)){stopSelf();return};wm=getSystemService(WINDOW_SERVICE) as WindowManager;makePanel();handler.post(tick)}
- private fun foreground(){val id="pocket_hud";val nm=getSystemService(NotificationManager::class.java);if(Build.VERSION.SDK_INT>=26)nm.createNotificationChannel(NotificationChannel(id,"Pocket HUD",NotificationManager.IMPORTANCE_LOW));val b=if(Build.VERSION.SDK_INT>=26)Notification.Builder(this,id)else @Suppress("DEPRECATION") Notification.Builder(this);startForeground(41,b.setContentTitle("Pocket HUD is active").setContentText("Tracking gaming battery usage").setSmallIcon(android.R.drawable.ic_menu_info_details).setOngoing(true).build())}
- private fun makePanel(){
-  val root=LinearLayout(this).apply{orientation=1;setPadding(dp(10),dp(7),dp(10),dp(7));background=GradientDrawable().apply{setColor(0xD9161A20.toInt());cornerRadius=dp(9).toFloat()};elevation=dp(4).toFloat();setOnTouchListener(Drag())}
-  val type=if(Build.VERSION.SDK_INT>=26)WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-  powerLine=TextView(this).apply{text="— W";textSize=15f;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER}
-  timeLine=TextView(this).apply{text="Remaining —";textSize=11f;setTextColor(0xFFD0D8E2.toInt());gravity=Gravity.CENTER}
-  root.addView(powerLine);root.addView(timeLine)
-  val p=WindowManager.LayoutParams(-2,-2,type,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply{gravity=Gravity.TOP or Gravity.START;x=dp(10);y=dp(110)}
-  panel=root;wm.addView(root,p)
- }
- private fun addText(root:LinearLayout,value:String,size:Float,color:Int,bold:Boolean):TextView{val t=TextView(this).apply{text=value;textSize=size;setTextColor(color);if(bold)typeface=Typeface.DEFAULT_BOLD;setPadding(0,dp(5),0,dp(2))};root.addView(t);return t}
- private fun hasUsageAccess():Boolean{val ops=getSystemService(APP_OPS_SERVICE) as AppOpsManager;@Suppress("DEPRECATION") return ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,Process.myUid(),packageName)==AppOpsManager.MODE_ALLOWED}
- private fun currentForegroundPackage():String?{if(!hasUsageAccess())return null;val usm=getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager;val ev=usm.queryEvents(System.currentTimeMillis()-15000,System.currentTimeMillis());val e=UsageEvents.Event();var foreground=activePackage;while(ev.hasNextEvent()){ev.getNextEvent(e);when(e.eventType){UsageEvents.Event.ACTIVITY_RESUMED->foreground=e.packageName;UsageEvents.Event.ACTIVITY_PAUSED,UsageEvents.Event.ACTIVITY_STOPPED->if(foreground==e.packageName)foreground=null}};return foreground?.takeIf{it!=packageName}}
- private fun update(){
-  val now=System.currentTimeMillis()
-  val bm=getSystemService(BATTERY_SERVICE) as BatteryManager
-  val level=bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-  val current=bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-  val charge=bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
-  val bi=registerReceiver(null,IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-  val volt=bi?.getIntExtra(BatteryManager.EXTRA_VOLTAGE,-1)?:-1
-  val watts=if(current!=Int.MIN_VALUE&&volt>0)abs(current.toLong())*volt/1000000000.0 else null
-  powerLine.text=if(watts==null)"Power —"else String.format(Locale.getDefault(),"%.2f W",watts)
-  if(level in 1..100){if(previousLevel>=0&&previousAt>0&&level<previousLevel){val h=(now-previousAt)/3600000.0;if(h>0)drainPerHour=(previousLevel-level)/h};if(previousLevel<0||level<previousLevel){previousLevel=level;previousAt=now}}
-  val direct=if(!bm.isCharging&&current!=Int.MIN_VALUE&&charge>0&&abs(current.toLong())>20)(charge.toDouble()/abs(current.toLong())).takeIf{it.isFinite()&&it in 0.0..72.0}else null
-  val hrs=direct?:drainPerHour?.let{if(it>0)level/it else null}
-  timeLine.text=if(bm.isCharging)"Remaining — · Charging"else if(hrs==null)"Remaining —"else String.format(Locale.getDefault(),"Remaining %dh %02dm",(hrs*60).toInt()/60,(hrs*60).toInt()%60)
- }
- private fun cpuLoad():Double?{return try{val a=BufferedReader(FileReader("/proc/stat")).use{it.readLine().trim().split(Regex("\\s+")).drop(1).map{v->v.toLong()}};val idle=a[3]+(a.getOrNull(4)?:0);val total=a.sum();val old=cpuPrevious;cpuPrevious=total to idle;if(old==null)null else{val dt=total-old.first;val di=idle-old.second;if(dt>0)100.0*(dt-di)/dt else null}}catch(_:Exception){null}}
- private inner class Drag:View.OnTouchListener{var sx=0;var sy=0;var tx=0f;var ty=0f;override fun onTouch(v:View,e:MotionEvent):Boolean{val p=panel?.layoutParams as? WindowManager.LayoutParams?:return false;when(e.action){MotionEvent.ACTION_DOWN->{sx=p.x;sy=p.y;tx=e.rawX;ty=e.rawY;return true};MotionEvent.ACTION_MOVE->{p.x=sx+(e.rawX-tx).toInt();p.y=sy+(e.rawY-ty).toInt();wm.updateViewLayout(panel,p);return true}};return true}}
- override fun onDestroy(){handler.removeCallbacks(tick);panel?.let{if(::wm.isInitialized)wm.removeView(it)};panel=null;super.onDestroy()}
- override fun onBind(intent:Intent?):IBinder?=null
+
+class OverlayService : Service() {
+    private lateinit var windowManager: WindowManager
+    private var panel: View? = null
+    private lateinit var batteryValue: TextView
+    private lateinit var remainingValue: TextView
+    private lateinit var powerValue: TextView
+    private val handler = Handler(Looper.getMainLooper())
+
+    private var previousLevel = -1
+    private var previousAt = 0L
+    private var drainPerHour: Double? = null
+
+    private val tick = object : Runnable {
+        override fun run() {
+            update()
+            handler.postDelayed(this, 5000)
+        }
+    }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    override fun onCreate() {
+        super.onCreate()
+        foreground()
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return
+        }
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        makePanel()
+        handler.post(tick)
+    }
+
+    private fun foreground() {
+        val channelId = "pocket_hud"
+        val manager = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(
+                NotificationChannel(channelId, "Pocket HUD", NotificationManager.IMPORTANCE_LOW)
+            )
+        }
+        val builder = if (Build.VERSION.SDK_INT >= 26) {
+            Notification.Builder(this, channelId)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+        startForeground(
+            41,
+            builder.setContentTitle("Pocket HUD is active")
+                .setContentText("Battery, remaining time and power")
+                .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                .setOngoing(true)
+                .build()
+        )
+    }
+
+    private fun makePanel() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(9), dp(8), dp(11), dp(8))
+            background = GradientDrawable().apply {
+                setColor(Color.BLACK)
+                cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), 0xFF30343B.toInt())
+            }
+            elevation = dp(8).toFloat()
+            setOnTouchListener(Drag())
+            contentDescription = "Pocket HUD. Drag to move."
+        }
+
+        val batteryCircle = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.BLACK)
+                setStroke(dp(2), 0xFF65D6A0.toInt())
+            }
+        }
+        batteryCircle.layoutParams = LinearLayout.LayoutParams(dp(59), dp(59))
+        batteryCircle.addView(TextView(this).apply {
+            text = "▣"
+            textSize = 11f
+            setTextColor(0xFF65D6A0.toInt())
+            gravity = Gravity.CENTER
+        })
+        batteryValue = TextView(this).apply {
+            text = "—%"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+        }
+        batteryCircle.addView(batteryValue)
+        root.addView(batteryCircle)
+
+        val details = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), 0, 0, 0)
+        }
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        }
+        brandRow.addView(TextView(this).apply {
+            text = "PH"
+            textSize = 9f
+            letterSpacing = 0.12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(0xFF65D6FF.toInt())
+            gravity = Gravity.CENTER
+        })
+        details.addView(brandRow, LinearLayout.LayoutParams(-1, dp(13)))
+
+        val remainingRow = metricRow("◷", 0xFFD6DCE5.toInt())
+        remainingValue = remainingRow.second
+        details.addView(remainingRow.first)
+
+        val powerRow = metricRow("ϟ", 0xFF65D6FF.toInt())
+        powerValue = powerRow.second
+        details.addView(powerRow.first)
+
+        root.addView(details, LinearLayout.LayoutParams(dp(91), -2))
+
+        val type = if (Build.VERSION.SDK_INT >= 26) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        val params = WindowManager.LayoutParams(
+            -2,
+            -2,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = dp(10)
+            y = dp(110)
+        }
+        panel = root
+        windowManager.addView(root, params)
+    }
+
+    private fun metricRow(symbol: String, iconColor: Int): Pair<LinearLayout, TextView> {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        row.addView(TextView(this).apply {
+            text = symbol
+            textSize = 17f
+            setTextColor(iconColor)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+        }, LinearLayout.LayoutParams(dp(22), dp(23)))
+        val value = TextView(this).apply {
+            text = "—"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
+            includeFontPadding = false
+            setPadding(dp(4), 0, 0, 0)
+        }
+        row.addView(value)
+        return row to value
+    }
+
+    private fun update() {
+        val now = System.currentTimeMillis()
+        val batteryManager = getSystemService(BATTERY_SERVICE) as BatteryManager
+        val level = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val current = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        val chargeCounter = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
+        val batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val voltageMv = batteryIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
+
+        batteryValue.text = if (level in 0..100) "$level%" else "—%"
+
+        val watts = if (current != Int.MIN_VALUE && voltageMv > 0) {
+            abs(current.toLong()) * voltageMv / 1_000_000_000.0
+        } else null
+        powerValue.text = watts?.let {
+            String.format(Locale.getDefault(), "%.1f W", it)
+        } ?: "— W"
+
+        if (level in 1..100) {
+            if (previousLevel >= 0 && previousAt > 0 && level < previousLevel) {
+                val elapsedHours = (now - previousAt) / 3_600_000.0
+                if (elapsedHours > 0) drainPerHour = (previousLevel - level) / elapsedHours
+            }
+            if (previousLevel < 0 || level < previousLevel) {
+                previousLevel = level
+                previousAt = now
+            }
+        }
+
+        val discharging = !batteryManager.isCharging
+        val directHours = if (
+            discharging && current != Int.MIN_VALUE &&
+            chargeCounter > 0 && abs(current.toLong()) > 20
+        ) {
+            (chargeCounter.toDouble() / abs(current.toLong()))
+                .takeIf { it.isFinite() && it in 0.0..72.0 }
+        } else null
+
+        val remainingHours = directHours ?: if (discharging) {
+            drainPerHour?.let { rate -> if (rate > 0) level / rate else null }
+        } else null
+
+        remainingValue.text = if (remainingHours == null) {
+            "—"
+        } else {
+            val totalMinutes = (remainingHours * 60).toInt()
+            String.format(Locale.getDefault(), "%dh %02dm", totalMinutes / 60, totalMinutes % 60)
+        }
+    }
+
+    private inner class Drag : View.OnTouchListener {
+        private var startX = 0
+        private var startY = 0
+        private var touchX = 0f
+        private var touchY = 0f
+
+        override fun onTouch(view: View, event: MotionEvent): Boolean {
+            val params = panel?.layoutParams as? WindowManager.LayoutParams ?: return false
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = params.x
+                    startY = params.y
+                    touchX = event.rawX
+                    touchY = event.rawY
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = startX + (event.rawX - touchX).toInt()
+                    params.y = startY + (event.rawY - touchY).toInt()
+                    windowManager.updateViewLayout(panel, params)
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> return true
+            }
+            return true
+        }
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(tick)
+        panel?.let { if (::windowManager.isInitialized) windowManager.removeView(it) }
+        panel = null
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 }
