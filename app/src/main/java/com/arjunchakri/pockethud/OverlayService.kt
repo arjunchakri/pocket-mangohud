@@ -89,13 +89,13 @@ class OverlayService : Service() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(5), dp(8), dp(5))
+            setPadding(dp(6), dp(3), dp(6), dp(3))
             background = GradientDrawable().apply {
                 setColor(Color.argb(179, 0, 0, 0))
-                cornerRadius = dp(14).toFloat()
-                setStroke(dp(1), 0x55343B46)
+                cornerRadius = dp(10).toFloat()
+                setStroke(dp(1), 0x6650DFA0)
             }
-            elevation = dp(5).toFloat()
+            elevation = dp(2).toFloat()
             setOnTouchListener(Drag())
             contentDescription = "Pocket HUD. Battery, power and remaining time. Drag to move."
         }
@@ -132,13 +132,13 @@ class OverlayService : Service() {
         startNeonReactor(root)
     }
 
-    // Compact Neon Reactor treatment: animate only the 1dp outline, never the capsule size.
+    // Minimal Neon Reactor: a slow, low-intensity color drift on the 1dp outline only.
     private fun startNeonReactor(root: LinearLayout) {
         val background = root.background as? GradientDrawable ?: return
-        val green = Color.rgb(80, 255, 145)
-        val cyan = Color.rgb(40, 220, 255)
+        val green = Color.rgb(72, 190, 135)
+        val cyan = Color.rgb(65, 165, 195)
         neonAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 2200L
+            duration = 6500L
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
             interpolator = AccelerateDecelerateInterpolator()
@@ -147,7 +147,7 @@ class OverlayService : Service() {
                 val red = (Color.red(green) + (Color.red(cyan) - Color.red(green)) * fraction).toInt()
                 val greenChannel = (Color.green(green) + (Color.green(cyan) - Color.green(green)) * fraction).toInt()
                 val blue = (Color.blue(green) + (Color.blue(cyan) - Color.blue(green)) * fraction).toInt()
-                background.setStroke(dp(1), Color.rgb(red, greenChannel, blue))
+                background.setStroke(dp(1), Color.argb(185, red, greenChannel, blue))
             }
             start()
         }
