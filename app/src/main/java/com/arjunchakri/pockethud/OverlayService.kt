@@ -86,58 +86,27 @@ class OverlayService : Service() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), dp(5), dp(8), dp(5))
+            setPadding(dp(8), dp(5), dp(8), dp(5))
             background = GradientDrawable().apply {
-                setColor(Color.BLACK)
-                cornerRadius = dp(19).toFloat()
-                setStroke(dp(1), 0xFF30343B.toInt())
+                setColor(Color.argb(179, 0, 0, 0))
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), 0x55343B46)
             }
-            elevation = dp(8).toFloat()
+            elevation = dp(5).toFloat()
             setOnTouchListener(Drag())
-            contentDescription = "Pocket HUD. Drag to move."
+            contentDescription = "Pocket HUD. Battery, power and remaining time. Drag to move."
         }
 
-        val batteryCircle = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.BLACK)
-                setStroke(dp(2), 0xFF65D6A0.toInt())
-            }
-        }
-        batteryCircle.layoutParams = LinearLayout.LayoutParams(dp(42), dp(42))
-        batteryCircle.addView(TextView(this).apply {
-            text = "▣"
-            textSize = 8f
-            setTextColor(0xFF65D6A0.toInt())
-            gravity = Gravity.CENTER
-        })
-        batteryValue = TextView(this).apply {
-            text = "—%"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            includeFontPadding = false
-        }
-        batteryCircle.addView(batteryValue)
-        root.addView(batteryCircle)
+        batteryValue = compactValue("▣  —%", 0xFF65D6A0.toInt())
+        root.addView(batteryValue)
+        addSeparator(root)
 
-        val details = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), 0, 0, 0)
-        }
-        val remainingRow = metricRow("◷", 0xFFD6DCE5.toInt())
-        remainingValue = remainingRow.second
-        details.addView(remainingRow.first)
+        powerValue = compactValue("—W", Color.WHITE)
+        root.addView(powerValue)
+        addSeparator(root)
 
-        val powerRow = metricRow("ϟ", 0xFF65D6FF.toInt())
-        powerValue = powerRow.second
-        details.addView(powerRow.first)
-
-        root.addView(details, LinearLayout.LayoutParams(dp(78), -2))
+        remainingValue = compactValue("—", 0xFFD6DCE5.toInt())
+        root.addView(remainingValue)
 
         val type = if (Build.VERSION.SDK_INT >= 26) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -146,9 +115,7 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
         val params = WindowManager.LayoutParams(
-            -2,
-            -2,
-            type,
+            -2, -2, type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
@@ -161,29 +128,25 @@ class OverlayService : Service() {
         windowManager.addView(root, params)
     }
 
-    private fun metricRow(symbol: String, iconColor: Int): Pair<LinearLayout, TextView> {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        row.addView(TextView(this).apply {
-            text = symbol
-            textSize = 13f
-            setTextColor(iconColor)
+    private fun compactValue(initial: String, color: Int) = TextView(this).apply {
+        text = initial
+        textSize = 10f
+        setTextColor(color)
+        typeface = Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER
+        includeFontPadding = false
+        setPadding(dp(2), dp(1), dp(2), dp(1))
+    }
+
+    private fun addSeparator(parent: LinearLayout) {
+        parent.addView(TextView(this).apply {
+            text = "·"
+            textSize = 11f
+            setTextColor(0xFF777F8A.toInt())
             gravity = Gravity.CENTER
             includeFontPadding = false
-        }, LinearLayout.LayoutParams(dp(16), dp(18)))
-        val value = TextView(this).apply {
-            text = "—"
-            textSize = 10f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER_VERTICAL
-            includeFontPadding = false
-            setPadding(dp(2), 0, 0, 0)
-        }
-        row.addView(value)
-        return row to value
+            setPadding(dp(3), 0, dp(3), 0)
+        })
     }
 
     private fun update() {
@@ -195,14 +158,14 @@ class OverlayService : Service() {
         val batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val voltageMv = batteryIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
 
-        batteryValue.text = if (level in 0..100) "$level%" else "—%"
+        batteryValue.text = if (level in 0..100) "▣ $level%" else "▣ —%"
 
         val watts = if (current != Int.MIN_VALUE && voltageMv > 0) {
             abs(current.toLong()) * voltageMv / 1_000_000_000.0
         } else null
         powerValue.text = watts?.let {
-            String.format(Locale.getDefault(), "%.1f W", it)
-        } ?: "— W"
+            String.format(Locale.getDefault(), "%.1fW", it)
+        } ?: "—W"
 
         if (level in 1..100) {
             if (previousLevel >= 0 && previousAt > 0 && level < previousLevel) {
