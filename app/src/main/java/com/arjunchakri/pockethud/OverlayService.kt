@@ -86,10 +86,10 @@ class OverlayService : Service() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(9), dp(8), dp(11), dp(8))
+            setPadding(dp(6), dp(5), dp(8), dp(5))
             background = GradientDrawable().apply {
                 setColor(Color.BLACK)
-                cornerRadius = dp(24).toFloat()
+                cornerRadius = dp(19).toFloat()
                 setStroke(dp(1), 0xFF30343B.toInt())
             }
             elevation = dp(8).toFloat()
@@ -106,16 +106,16 @@ class OverlayService : Service() {
                 setStroke(dp(2), 0xFF65D6A0.toInt())
             }
         }
-        batteryCircle.layoutParams = LinearLayout.LayoutParams(dp(59), dp(59))
+        batteryCircle.layoutParams = LinearLayout.LayoutParams(dp(42), dp(42))
         batteryCircle.addView(TextView(this).apply {
             text = "▣"
-            textSize = 11f
+            textSize = 8f
             setTextColor(0xFF65D6A0.toInt())
             gravity = Gravity.CENTER
         })
         batteryValue = TextView(this).apply {
             text = "—%"
-            textSize = 16f
+            textSize = 12f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
@@ -127,22 +127,8 @@ class OverlayService : Service() {
         val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), 0, 0, 0)
+            setPadding(dp(6), 0, 0, 0)
         }
-        val brandRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        }
-        brandRow.addView(TextView(this).apply {
-            text = "PH"
-            textSize = 9f
-            letterSpacing = 0.12f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xFF65D6FF.toInt())
-            gravity = Gravity.CENTER
-        })
-        details.addView(brandRow, LinearLayout.LayoutParams(-1, dp(13)))
-
         val remainingRow = metricRow("◷", 0xFFD6DCE5.toInt())
         remainingValue = remainingRow.second
         details.addView(remainingRow.first)
@@ -151,7 +137,7 @@ class OverlayService : Service() {
         powerValue = powerRow.second
         details.addView(powerRow.first)
 
-        root.addView(details, LinearLayout.LayoutParams(dp(91), -2))
+        root.addView(details, LinearLayout.LayoutParams(dp(78), -2))
 
         val type = if (Build.VERSION.SDK_INT >= 26) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -182,19 +168,19 @@ class OverlayService : Service() {
         }
         row.addView(TextView(this).apply {
             text = symbol
-            textSize = 17f
+            textSize = 13f
             setTextColor(iconColor)
             gravity = Gravity.CENTER
             includeFontPadding = false
-        }, LinearLayout.LayoutParams(dp(22), dp(23)))
+        }, LinearLayout.LayoutParams(dp(16), dp(18)))
         val value = TextView(this).apply {
             text = "—"
-            textSize = 13f
+            textSize = 10f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER_VERTICAL
             includeFontPadding = false
-            setPadding(dp(4), 0, 0, 0)
+            setPadding(dp(2), 0, 0, 0)
         }
         row.addView(value)
         return row to value
@@ -246,7 +232,7 @@ class OverlayService : Service() {
             "—"
         } else {
             val totalMinutes = (remainingHours * 60).toInt()
-            String.format(Locale.getDefault(), "%dh %02dm", totalMinutes / 60, totalMinutes % 60)
+            String.format(Locale.getDefault(), "%dh%02d", totalMinutes / 60, totalMinutes % 60)
         }
     }
 
