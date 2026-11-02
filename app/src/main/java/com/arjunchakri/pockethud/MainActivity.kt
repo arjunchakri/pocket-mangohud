@@ -32,8 +32,8 @@ class MainActivity:Activity(){
   setup.addView(Button(this).apply{text="Start HUD";isAllCaps=false;setOnClickListener{startHud()}})
   setup.addView(Button(this).apply{text="Stop HUD";isAllCaps=false;setOnClickListener{stopService(Intent(this@MainActivity,OverlayService::class.java));refresh()}})
   root.addView(setup)
-  root.addView(TextView(this).apply{text="OPTIONAL HUD METRICS";textSize=11f;letterSpacing=.12f;typeface=Typeface.DEFAULT_BOLD;setTextColor(0xFF83BEDD.toInt());setPadding(2,dp(20),0,dp(6))})
-  listOf("show_ram" to "RAM usage","show_cpu" to "CPU usage","show_refresh" to "Screen refresh rate","show_temp" to "Battery temperature and voltage","show_fps" to "FPS (availability depends on Android/game)","show_power" to "Estimated battery power draw").forEach{(key,label)->root.addView(CheckBox(this).apply{text=label;isChecked=prefs.getBoolean(key,key=="show_temp");setTextColor(0xFFD8E1EA.toInt());setOnCheckedChangeListener{_,checked->prefs.edit().putBoolean(key,checked).apply()}})}
+  root.addView(TextView(this).apply{text="OPTIONAL DETAILS";textSize=11f;letterSpacing=.12f;typeface=Typeface.DEFAULT_BOLD;setTextColor(0xFF83BEDD.toInt());setPadding(2,dp(20),0,dp(6))})
+  listOf("show_ram" to "RAM usage","show_cpu" to "CPU usage","show_refresh" to "Screen refresh rate","show_temp" to "Battery temperature and voltage","show_power" to "Estimated battery power draw").forEach{(key,label)->root.addView(CheckBox(this).apply{text=label;isChecked=prefs.getBoolean(key,false);setTextColor(0xFFD8E1EA.toInt());setOnCheckedChangeListener{_,checked->prefs.edit().putBoolean(key,checked).apply()}})}
   root.addView(TextView(this).apply{text="App detection uses Android Usage Access. Per-app battery drain is estimated from battery percentage change during the foreground session.";textSize=12f;setTextColor(0xFF8996A6.toInt());setPadding(2,dp(16),2,0)})
   setContentView(root);refresh()
  }
