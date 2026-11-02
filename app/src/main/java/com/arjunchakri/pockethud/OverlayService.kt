@@ -1,5 +1,7 @@
 package com.arjunchakri.pockethud
 
+import android.animation.ValueAnimator
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -32,6 +34,7 @@ class OverlayService : Service() {
     private lateinit var remainingValue: TextView
     private lateinit var powerValue: TextView
     private val handler = Handler(Looper.getMainLooper())
+    private var neonAnimator: ValueAnimator? = null
 
     private var previousLevel = -1
     private var previousAt = 0L
@@ -126,6 +129,28 @@ class OverlayService : Service() {
         }
         panel = root
         windowManager.addView(root, params)
+        startNeonReactor(root)
+    }
+
+    // Compact Neon Reactor treatment: animate only the 1dp outline, never the capsule size.
+    private fun startNeonReactor(root: LinearLayout) {
+        val background = root.background as? GradientDrawable ?: return
+        val green = Color.rgb(80, 255, 145)
+        val cyan = Color.rgb(40, 220, 255)
+        neonAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 2200L
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { animator ->
+                val fraction = animator.animatedValue as Float
+                val red = (Color.red(green) + (Color.red(cyan) - Color.red(green)) * fraction).toInt()
+                val greenChannel = (Color.green(green) + (Color.green(cyan) - Color.green(green)) * fraction).toInt()
+                val blue = (Color.blue(green) + (Color.blue(cyan) - Color.blue(green)) * fraction).toInt()
+                background.setStroke(dp(1), Color.rgb(red, greenChannel, blue))
+            }
+            start()
+        }
     }
 
     private fun compactValue(initial: String, color: Int) = TextView(this).apply {
@@ -229,6 +254,8 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        neonAnimator?.cancel()
+        neonAnimator = null
         panel?.let { if (::windowManager.isInitialized) windowManager.removeView(it) }
         panel = null
         super.onDestroy()
